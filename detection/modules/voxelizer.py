@@ -75,11 +75,22 @@ class Voxelizer(torch.nn.Module):
             BEV occupacy image as a [batch_size x D x H x W] tensor.
         """
         # TODO: Replace this stub code.
-        return torch.zeros(
+
+        BEV = torch.zeros(
             (len(pointclouds), self._depth, self._height, self._width),
             dtype=torch.bool,
             device=pointclouds[0].device,
         )
+
+        i = np.floor((pointclouds[:, 2] - self._z_min)/self._step)
+        j = np.floor((self.y_max - pointclouds[:, 1])/self._step)
+        k = np.floor((pointclouds[:, 0] - self._x_min)/self._step)
+
+        occupied = np.stack((i, j, k), axis = -1)
+
+        BEV[:, occupied] = 1
+
+        return BEV
 
     def project_detections(self, detections: Detections) -> Detections:
         """Project detections to voxelized frame and filter out-of-bounds ones.
