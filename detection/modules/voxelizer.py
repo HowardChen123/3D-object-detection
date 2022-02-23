@@ -75,20 +75,19 @@ class Voxelizer(torch.nn.Module):
             BEV occupacy image as a [batch_size x D x H x W] tensor.
         """
         # TODO: Replace this stub code.
-
+        # BEV size P * D * H * W
         BEV = torch.zeros(
-            (len(pointclouds), self._depth, self._height, self._width),
+            (len(pointclouds), self._depth, self._height, self._width),  # Helper function
             dtype=torch.bool,
             device=pointclouds[0].device,
         )
-
-        i = np.floor((pointclouds[:, 2] - self._z_min)/self._step)
-        j = np.floor((self.y_max - pointclouds[:, 1])/self._step)
-        k = np.floor((pointclouds[:, 0] - self._x_min)/self._step)
-
-        occupied = np.stack((i, j, k), axis = -1)
-
-        BEV[:, occupied] = 1
+        # For each point p, the voxel (i, j, k)
+        if self._x_min <= pointclouds[0] <= self._x_max and self._y_min <= pointclouds[1] <= self._y_max:
+            i = torch.floor((pointclouds[2] - self._z_min)/self._step)
+            j = torch.floor((self.y_max - pointclouds[1])/self._step)
+            k = torch.floor((pointclouds[0] - self._x_min)/self._step)
+            occupied = torch.stack([i, j, k])
+            BEV[:, occupied] = 1
 
         return BEV
 
@@ -131,3 +130,5 @@ class Voxelizer(torch.nn.Module):
         scores = detections.scores[mask] if detections.scores is not None else None
 
         return Detections(centroids, yaws, boxes, scores)
+
+
