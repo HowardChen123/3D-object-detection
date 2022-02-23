@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 import torch
+import math
 
 from detection.types import Detections
 
@@ -81,14 +82,68 @@ class Voxelizer(torch.nn.Module):
             dtype=torch.bool,
             device=pointclouds[0].device,
         )
+        
+        for batch_num in range(len(pointclouds)):
+            for point in pointclouds[batch_num]:
+                x, y, z = point
+                z = max(self._z_min + 1, min(z, self._z_max - 1))
+                i = math.floor((z - self._z_min)/self._step)
+                j = math.floor((self._y_max - y)/self._step)
+                k = math.floor((x - self._x_min)/self._step)
+                if (self._x_min < x < self._x_max) and (self._y_min < y < self._y_max):
+                    
+                    BEV[batch_num, i, j, k] = 1
 
-        i = np.floor((pointclouds[:, 2] - self._z_min)/self._step)
-        j = np.floor((self.y_max - pointclouds[:, 1])/self._step)
-        k = np.floor((pointclouds[:, 0] - self._x_min)/self._step)
+        # for batch_num in range(len(pointclouds)):
+        
+        #     x, y, z = pointclouds[batch_num][:, 0], pointclouds[batch_num][:, 1], pointclouds[batch_num][:, 2]
+            
+        #     z = torch.maximum(torch.tensor(self._z_min), torch.minimum(z, torch.tensor(self._z_max)))
 
-        occupied = np.stack((i, j, k), axis = -1)
+        #     i = torch.floor((z - self._z_min)/self._step)
+        #     j = torch.floor((self._y_max - y)/self._step)
+        #     k = torch.floor((x - self._x_min)/self._step)
 
-        BEV[:, occupied] = 1
+        #     occupied = torch.stack((i, j, k)).permute(1, 0)
+            
+        #     x_valid = (x <= torch.tensor(self._x_max))
+        #     x_valid = (x_valid >= torch.tensor(self._x_min))
+
+        #     y_valid = (y <= torch.tensor(self._y_max))
+        #     y_valid = (y_valid >= torch.tensor(self._y_min))
+
+        #     occupied = occupied[(x_valid & y_valid)]
+        #     print(self._x_min)
+        #     print(occupied.shape)
+        #     for point in occupied:
+        #         i, j, k = point
+        #         print(k * self._step + self._x_min)
+        #         BEV[batch_num, i, j, k] = 1
+            
+
+        # i = np.floor((pointclouds[:, 2] - self._z_min)/self._step)
+        # j = np.floor((self._y_max - pointclouds[:, 1])/self._step)
+        # k = np.floor((pointclouds[:, 0] - self._x_min)/self._step)
+
+        # count = 0
+        # for x in pointclouds[:, 0]:
+        #     if self._x_min > x or x > self._x_max:
+        #         count += 1
+        # print("Out of Bound X", count)
+        # count = 0
+        # for y in pointclouds[:, 1]:
+        #     if self._y_min > y or y > self._y_max:
+        #         count += 1
+        # print("Out of Bound Y", count)
+        # count = 0
+        # for z in pointclouds[:, 2]:
+        #     if self._z_min > z or z > self._z_max:
+        #         count += 1
+        # print("Out of Bound Z", count)
+
+        # occupied = np.squeeze(np.stack((i, j, k), axis = -1))
+
+        # BEV[:, occupied] = 1
 
         return BEV
 
