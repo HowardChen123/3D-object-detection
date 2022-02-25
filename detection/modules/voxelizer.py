@@ -1,8 +1,8 @@
+import math
 from dataclasses import dataclass
 from typing import List, Tuple
 
 import torch
-import math
 
 from detection.types import Detections
 
@@ -78,48 +78,67 @@ class Voxelizer(torch.nn.Module):
         # TODO: Replace this stub code.
         # BEV size P * D * H * W
         BEV = torch.zeros(
-            (len(pointclouds), self._depth, self._height, self._width),  # Helper function
+            (
+                len(pointclouds),
+                self._depth,
+                self._height,
+                self._width,
+            ),  # Helper function
             dtype=torch.bool,
             device=pointclouds[0].device,
         )
-        
-        for batch_num in range(len(pointclouds)):
-            for point in pointclouds[batch_num]:
-                x, y, z = point
-                z = max(self._z_min + 1, min(z, self._z_max - 1))
-                i = math.floor((z - self._z_min)/self._step)
-                j = math.floor((self._y_max - y)/self._step)
-                k = math.floor((x - self._x_min)/self._step)
-                if (self._x_min < x < self._x_max) and (self._y_min < y < self._y_max):
-                    
-                    BEV[batch_num, i, j, k] = 1
 
         # for batch_num in range(len(pointclouds)):
-        
-        #     x, y, z = pointclouds[batch_num][:, 0], pointclouds[batch_num][:, 1], pointclouds[batch_num][:, 2]
+        #     for point in pointclouds[batch_num]:
+        #         x, y, z = point
+        #         z = max(self._z_min + 1, min(z, self._z_max - 1))
+        #         i = math.floor((z - self._z_min)/self._step)
+        #         j = math.floor((self._y_max - y)/self._step)
+        #         k = math.floor((x - self._x_min)/self._step)
+        #         if (self._x_min < x < self._x_max) and (self._y_min < y < self._y_max):
+        #             BEV[batch_num, i, j, k] = 1
+
+        for batch_num in range(len(pointclouds)):
+
+            x, y, z = (
+                pointclouds[batch_num][:, 0],
+                pointclouds[batch_num][:, 1],
+                pointclouds[batch_num][:, 2]
+            )
+
+            z = torch.maximum(
+                torch.tensor(self._z_min), torch.minimum(z, torch.tensor(self._z_max))
+            )
+
+            i = torch.floor((z - self._z_min) / self._step)
+            i = torch.maximum(
+                torch.tensor(0), torch.minimum(i, torch.tensor(self._depth - 1))
+            )
+            j = torch.floor((self._y_max - y) / self._step)
+            k = torch.floor((x - self._x_min) / self._step)
             
-        #     z = torch.maximum(torch.tensor(self._z_min), torch.minimum(z, torch.tensor(self._z_max)))
+            occupied = torch.stack([i, j, k]).permute(1, 0)
+            x_valid = (x < torch.tensor(self._x_max))
+            x_valid = (x_valid > torch.tensor(self._x_min))
+            y_valid = (y < torch.tensor(self._y_max))
+            y_valid = (y_valid > torch.tensor(self._y_min))
+            occupied = occupied[(x_valid & y_valid)]
 
-        #     i = torch.floor((z - self._z_min)/self._step)
-        #     j = torch.floor((self._y_max - y)/self._step)
-        #     k = torch.floor((x - self._x_min)/self._step)
 
-        #     occupied = torch.stack((i, j, k)).permute(1, 0)
-            
-        #     x_valid = (x <= torch.tensor(self._x_max))
-        #     x_valid = (x_valid >= torch.tensor(self._x_min))
+            # index = torch.as_tensor(occupied)
+            # x_valid = (x <= torch.tensor(self._x_max))
+            # x_valid = (x_valid >= torch.tensor(self._x_min))
 
-        #     y_valid = (y <= torch.tensor(self._y_max))
-        #     y_valid = (y_valid >= torch.tensor(self._y_min))
+            # y_valid = (y <= torch.tensor(self._y_max))
+            # y_valid = (y_valid >= torch.tensor(self._y_min))
 
-        #     occupied = occupied[(x_valid & y_valid)]
+            # occupied = occupied[(x_valid & y_valid)]
         #     print(self._x_min)
         #     print(occupied.shape)
         #     for point in occupied:
         #         i, j, k = point
         #         print(k * self._step + self._x_min)
         #         BEV[batch_num, i, j, k] = 1
-            
 
         # i = np.floor((pointclouds[:, 2] - self._z_min)/self._step)
         # j = np.floor((self._y_max - pointclouds[:, 1])/self._step)
@@ -186,5 +205,3 @@ class Voxelizer(torch.nn.Module):
         scores = detections.scores[mask] if detections.scores is not None else None
 
         return Detections(centroids, yaws, boxes, scores)
-
-

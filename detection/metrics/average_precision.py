@@ -62,6 +62,17 @@ def compute_precision_recall_curve(
         A precision/recall curve.
     """
     # TODO: Replace this stub code.
+    # EvaluationFrame: detections: Detections + labels: Detections
+    # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
+    # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
+    for evaluation in frames:        
+        cen_dect_x = evaluation.detections.centroids_x()
+        cen_dect_y =  evaluation.detections.centroids_y()
+        cen_label_x = evaluation.labels.centroids_x()
+        cen_label_y = evaluation.labels.centroids_y()
+        cdist = torch.cdist(cen_dect_x, cen_label_x, p=2) + torch.cdist(cen_dect_y, cen_label_y, p=2)
+        if cdist <= threshold:
+            cdist = 0
     return PRCurve(torch.zeros(0), torch.zeros(0))
 
 
@@ -98,4 +109,6 @@ def compute_average_precision(
         A dataclass consisting of a PRCurve and its average precision.
     """
     # TODO: Replace this stub code.
-    return AveragePrecisionMetric(0.0, PRCurve(torch.zeros(0), torch.zeros(0)))
+    PR = compute_precision_recall_curve(frames, threshold) # return PRCurve(ap: float; pr_curve: PRCurve)
+    AP = compute_area_under_curve(PR) # return float AP
+    return AveragePrecisionMetric(AP, PR)
