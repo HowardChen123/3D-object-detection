@@ -65,14 +65,123 @@ def compute_precision_recall_curve(
     # EvaluationFrame: detections: Detections + labels: Detections
     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
-    for evaluation in frames:        
-        cen_dect_x = evaluation.detections.centroids_x()
-        cen_dect_y =  evaluation.detections.centroids_y()
-        cen_label_x = evaluation.labels.centroids_x()
-        cen_label_y = evaluation.labels.centroids_y()
-        cdist = torch.cdist(cen_dect_x, cen_label_x, p=2) + torch.cdist(cen_dect_y, cen_label_y, p=2)
-        if cdist <= threshold:
-            cdist = 0
+    TP = 0
+    FP = 0
+    FN = 0
+    print(1)
+    for evaluation in frames:
+        # detections = evaluation.detections
+        labels = evaluation.labels
+        # cen_dect_x = evaluation.detections.centroids_x
+        # cen_dect_y = evaluation.detections.centroids_y
+        cen_dect_x = torch.tensor(
+            [
+                332.3112,
+                285.8998,
+                122.4894,
+                357.6649,
+                64.7757,
+                38.4267,
+                141.1324,
+                213.9155,
+                97.0097,
+                255.5304,
+                5.1257,
+                134.9243,
+                238.1225,
+                218.9430,
+                263.2067,
+                214.1595,
+                383.9525,
+                214.4841,
+                361.6169,
+                312.8545,
+                253.7757,
+                409.9467,
+                428.3835,
+                257.4384,
+                277.9829,
+                495.0167,
+                514.9116,
+                450.9781,
+                524.2831,
+                113.3122,
+                474.4353,
+                271.1930,
+                94.5429,
+                205.9636,
+                562.1279,
+                357.6582,
+                219.6216,
+                219.0284,
+                355.7148,
+                544.5038,
+                456.4716,
+                438.9576,
+                413.7074,
+                494.2307,
+                545.3776,
+                571.9035,
+                435.1480,
+            ]
+        )
+        cen_dect_y = torch.tensor(
+            [
+                213.1609,
+                146.2983,
+                147.3490,
+                212.1950,
+                148.4082,
+                148.3913,
+                146.9179,
+                147.1249,
+                148.3654,
+                146.5415,
+                148.7203,
+                213.9323,
+                213.4773,
+                269.6452,
+                213.8994,
+                213.1286,
+                144.8393,
+                309.6230,
+                145.0992,
+                212.5672,
+                285.6110,
+                212.4601,
+                212.0627,
+                300.6386,
+                277.5184,
+                211.2473,
+                211.2106,
+                211.8750,
+                169.7425,
+                214.6782,
+                211.4983,
+                201.8788,
+                214.7467,
+                198.7489,
+                119.2907,
+                165.8538,
+                251.3134,
+                185.6335,
+                199.0747,
+                196.1872,
+                185.5902,
+                197.5800,
+                184.6023,
+                197.8069,
+                184.6367,
+                158.0220,
+                162.0241,
+            ]
+        )
+        detections = torch.stack((cen_dect_x, cen_dect_y), 1)
+        # cen_label_x = evaluation.labels.centroids_x
+        # cen_label_y = evaluation.labels.centroids_y
+        print(labels.centroids_x, labels.centroids_y)
+        # if cdist <= threshold:
+        #     cdist = 0
     return PRCurve(torch.zeros(0), torch.zeros(0))
 
 
@@ -94,6 +203,22 @@ def compute_area_under_curve(curve: PRCurve) -> float:
     # TODO: Replace this stub code.
     return torch.sum(curve.recall).item() * 0.0
 
+    # # PRCurve: precision: torch.Tensor + recall: torch.Tensor
+    # # Follow instructions, r_0 = 0.0
+    # # Prepare p
+    # p = curve.precision
+    # # Prepare r
+    # r = curve.recall
+    # # copy r
+    # c_range  = [i for i in range(0, r.size()[0] - 1)]
+    # range_tensor = torch.Tensor(c_range).int()
+    # copy = torch.zeros(r.size())
+    # c = copy.index_add_(0, range_tensor + 1, r[c_range])
+    # # r_i - r_{i - 1}
+    # r_minus = r - c
+    # AP = torch.sum(r_minus * p)
+    # return AP
+
 
 def compute_average_precision(
     frames: List[EvaluationFrame], threshold: float
@@ -109,6 +234,8 @@ def compute_average_precision(
         A dataclass consisting of a PRCurve and its average precision.
     """
     # TODO: Replace this stub code.
-    PR = compute_precision_recall_curve(frames, threshold) # return PRCurve(ap: float; pr_curve: PRCurve)
-    AP = compute_area_under_curve(PR) # return float AP
+    PR = compute_precision_recall_curve(
+        frames, threshold
+    )  # return PRCurve(ap: float; pr_curve: PRCurve)
+    AP = compute_area_under_curve(PR)  # return float AP
     return AveragePrecisionMetric(AP, PR)
