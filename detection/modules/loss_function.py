@@ -29,12 +29,11 @@ def heatmap_weighted_mse_loss(
             weighted average using the provided `heatmap`.
     """
     # TODO: Replace this stub code.
-
-    # Compute MSE loss between `predictions` and `targets` along the C dimensoion
     loss = torch.nn.MSELoss(reduction = 'none')
     mse_loss = torch.mean(loss(predictions, targets), dim = 1)
 
     mask = torch.squeeze(heatmap > heatmap_threshold)
+    assert mse_loss.shape == mask
 
     squeezed_heatmap = torch.squeeze(heatmap)
     weighted = torch.mul(mse_loss, squeezed_heatmap)

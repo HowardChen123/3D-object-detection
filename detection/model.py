@@ -117,6 +117,109 @@ class DetectionModel(nn.Module):
             A set of 2D bounding box detections.
         """
         # TODO: Replace this stub code.
+
+        D, H, W = bev_lidar.shape
+
+        # 1. Forward Pass
+        chi = torch.squeeze(self.forward(bev_lidar.unsqueeze(0)))
+        assert chi.shape == (7, H, W)
+
+        heatmap = chi[0]
+        offset_x = chi[1] 
+        offset_y = chi[2]
+        x_size = chi[3]
+        y_size = chi[4]
+        sin_theta = chi[5]
+        cos_theta = chi[6]
+
+        # 2. Localize Detections
+        detection = torch.zeros((k, 2), dtype = torch.int64)
+        detection_score = torch.zeros(k)
+
+        max_pool = nn.MaxPool2d(5, stride = 1, return_indices = True)
+        unpool = nn.MaxUnpool2d(5, stride = 1)
+        output, indices = max_pool(heatmap.unsqueeze(0))
+        output = torch.flatten(output.squeeze())
+        indices = torch.flatten(indices.squeeze())
+        output_indices = torch.stack((output, indices)).permute(1, 0)
+        local_max = torch.unique(output_indices, dim = 0)
+        local_max_sorted = local_max[local_max[:, 0].sort()[1]]
+        if len(local_max_sorted) <= k:
+            topk = local_max_sorted
+        else:
+            topk = local_max_sorted[:k]
+
+        for i in range(len(topk)):
+            detection_score[i] = topk[i][0]
+            rows = torch.div(topk[i][1], W, rounding_mode = "trunc")
+            cols = topk[i][1] % W
+            detection[i][0] = rows
+            detection[i][1] = cols
+
+        k = len(topk)
+
+        # heatmap_max_removed = torch.clone(heatmap)
+        # # size = H*W
+        # k_left = k
+        # while k_left > 0:
+        #     local_max = (heatmap==torch.max(heatmap_max_removed)).nonzero()[0]
+        #     # size -= 1
+        #     i, j = local_max[0], local_max[1]
+        #     detection[k - k_left][0], detection[k - k_left][1] = i.long(), j.long()
+        #     k_left = k_left - 1
+        #     # heatmap_max_removed[i, j] = -999999
+        #     # compare_lst = []
+        #     # for x in range(i - 2, i + 2 + 1):
+        #     #     for y in range(j - 2, j + 2 + 1):
+        #     #         if x in range(0, H) and y in range(0, W):
+        #     #             compare_lst.append(heatmap[x, y])
+        #     # print(heatmap[i, j])
+        #     # print(compare_lst)
+        #     # print(max(compare_lst))
+        #     # if heatmap[i, j] == max(compare_lst):
+        #     #     detection[k - k_left][0], detection[k - k_left][1] = i, j
+        #     #     detection_score[k-k_left] = heatmap[i, j]
+        #     #     k_left = k_left - 1
+            
+        #     # if size == 0:
+        #     #     break
+        
+        # #k = k - k_left
+        # #detection = detection[:k]
+
+        # 3. Refine locations
+        predicted_offsets = torch.zeros((k, 2))
+        for index in range(len(predicted_offsets)):
+            i, j = detection[index]
+            predicted_offsets[index][0] = offset_x[i, j] + detection[index][0]
+            predicted_offsets[index][1] = offset_y[i, j] + detection[index][1]
+
+        # 4. Predict bounding box
+        bounding_boxes = torch.zeros((k, 2))
+        for index in range(len(bounding_boxes)):
+            i, j = detection[index]
+            bounding_boxes[index][0] = x_size[i, j]
+            bounding_boxes[index][1] = y_size[i, j]
+
+        # 5. Predict heading
+        heading = torch.zeros(k)
+        for index in range(len(heading)):
+            i, j = detection[index]
+            heading[index] = torch.atan2(sin_theta[i, j], cos_theta[i, j])
+
+        # 6. Remove all detections with a score less than or equal to `score_threshold`
+        ind = (detection_score > score_threshold)
+        predicted_offsets = predicted_offsets[ind]
+        heading = heading[ind]
+        bounding_boxes = bounding_boxes[ind]
+        detection_score = detection_score[ind]
+
+        # Assertion
+
         return Detections(
-            torch.zeros((0, 3)), torch.zeros(0), torch.zeros((0, 2)), torch.zeros(0)
+            predicted_offsets, heading, bounding_boxes, detection_score
         )
+
+        # return Detections(
+        #     torch.zeros((0, 3)), torch.zeros(0), torch.zeros((0, 2)), torch.zeros(0)
+        # )
