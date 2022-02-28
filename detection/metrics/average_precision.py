@@ -65,124 +65,45 @@ def compute_precision_recall_curve(
     # EvaluationFrame: detections: Detections + labels: Detections
     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
-    TP = 0
-    FP = 0
-    FN = 0
-    print(1)
+    
     for evaluation in frames:
-        # detections = evaluation.detections
-        labels = evaluation.labels
-        # cen_dect_x = evaluation.detections.centroids_x
-        # cen_dect_y = evaluation.detections.centroids_y
-        cen_dect_x = torch.tensor(
-            [
-                332.3112,
-                285.8998,
-                122.4894,
-                357.6649,
-                64.7757,
-                38.4267,
-                141.1324,
-                213.9155,
-                97.0097,
-                255.5304,
-                5.1257,
-                134.9243,
-                238.1225,
-                218.9430,
-                263.2067,
-                214.1595,
-                383.9525,
-                214.4841,
-                361.6169,
-                312.8545,
-                253.7757,
-                409.9467,
-                428.3835,
-                257.4384,
-                277.9829,
-                495.0167,
-                514.9116,
-                450.9781,
-                524.2831,
-                113.3122,
-                474.4353,
-                271.1930,
-                94.5429,
-                205.9636,
-                562.1279,
-                357.6582,
-                219.6216,
-                219.0284,
-                355.7148,
-                544.5038,
-                456.4716,
-                438.9576,
-                413.7074,
-                494.2307,
-                545.3776,
-                571.9035,
-                435.1480,
-            ]
-        )
-        cen_dect_y = torch.tensor(
-            [
-                213.1609,
-                146.2983,
-                147.3490,
-                212.1950,
-                148.4082,
-                148.3913,
-                146.9179,
-                147.1249,
-                148.3654,
-                146.5415,
-                148.7203,
-                213.9323,
-                213.4773,
-                269.6452,
-                213.8994,
-                213.1286,
-                144.8393,
-                309.6230,
-                145.0992,
-                212.5672,
-                285.6110,
-                212.4601,
-                212.0627,
-                300.6386,
-                277.5184,
-                211.2473,
-                211.2106,
-                211.8750,
-                169.7425,
-                214.6782,
-                211.4983,
-                201.8788,
-                214.7467,
-                198.7489,
-                119.2907,
-                165.8538,
-                251.3134,
-                185.6335,
-                199.0747,
-                196.1872,
-                185.5902,
-                197.5800,
-                184.6023,
-                197.8069,
-                184.6367,
-                158.0220,
-                162.0241,
-            ]
-        )
-        detections = torch.stack((cen_dect_x, cen_dect_y), 1)
-        # cen_label_x = evaluation.labels.centroids_x
-        # cen_label_y = evaluation.labels.centroids_y
-        print(labels.centroids_x, labels.centroids_y)
-        # if cdist <= threshold:
-        #     cdist = 0
-    return PRCurve(torch.zeros(0), torch.zeros(0))
+        print(evaluation)
+        detections = evaluation.detections.centroids
+        labels = evaluation.labels.centroids
+        print(detections, labels)
+        TP = 0 
+        FP = 0
+        FN = 0
+        cdist = torch.cdist(detections, labels, p=2)
+        precision = []
+        recall = []
+        # record for labels matching
+        labels_record = torch.zeros(labels.size()[0])
+        for i in range(detections.size()[0]):
+            # Computing TP/FP 
+            # Step 1: the Euclidean distance between their centers is at most `threshold`; 
+            # Get labels for one detection satisfying threshold
+            under = cdist[i] <= threshold
+            under_ind = under.nonzero()
+            # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
+            matched_labels = cdist[i][under_ind] >= cdist[:, under_ind]
+            matched_labels = matched_labels.permute(1, 0, 2)
+            # Check if the detection satisfying any labels
+            result = torch.any(torch.all(matched_labels, 1))
+            TP += result
+            FP += 1 - result
+
+            # Computing FN
+            # record matched detections for each label
+            labels_det = torch.all(matched_labels, 1)
+            # Get index of all matched labels
+            lables_ind =  under_ind[labels_det] 
+            # Update record of labels
+            labels_record[lables_ind] += 1
+        FN += labels.size()[0] - torch.count_nonzero(labels_record)
+        precision.append(TP / (TP + FP))
+        recall.append(TP / (TP + FN))
+    return PRCurve(torch.tensor(precision), torch.tensor(recall))
 
 
 def compute_area_under_curve(curve: PRCurve) -> float:
