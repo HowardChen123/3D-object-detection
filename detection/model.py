@@ -124,7 +124,7 @@ class DetectionModel(nn.Module):
         chi = torch.squeeze(self.forward(bev_lidar.unsqueeze(0)))
         assert chi.shape == (7, H, W)
 
-        heatmap = chi[0]
+        heatmap = torch.sigmoid(chi[0])
         offset_x = chi[1] 
         offset_y = chi[2]
         x_size = chi[3]
@@ -132,18 +132,19 @@ class DetectionModel(nn.Module):
         sin_theta = chi[5]
         cos_theta = chi[6]
 
+        print("heatmap", heatmap.shape)
+
         # 2. Localize Detections
         detection = torch.zeros((k, 2), dtype = torch.int64)
         detection_score = torch.zeros(k)
 
         max_pool = nn.MaxPool2d(5, stride = 1, return_indices = True)
-        unpool = nn.MaxUnpool2d(5, stride = 1)
         output, indices = max_pool(heatmap.unsqueeze(0))
         output = torch.flatten(output.squeeze())
         indices = torch.flatten(indices.squeeze())
         output_indices = torch.stack((output, indices)).permute(1, 0)
         local_max = torch.unique(output_indices, dim = 0)
-        local_max_sorted = local_max[local_max[:, 0].sort()[1]]
+        local_max_sorted = local_max[local_max[:, 0].sort(descending = True)[1]]
         if len(local_max_sorted) <= k:
             topk = local_max_sorted
         else:
@@ -157,35 +158,8 @@ class DetectionModel(nn.Module):
             detection[i][1] = cols
 
         k = len(topk)
-
-        # heatmap_max_removed = torch.clone(heatmap)
-        # # size = H*W
-        # k_left = k
-        # while k_left > 0:
-        #     local_max = (heatmap==torch.max(heatmap_max_removed)).nonzero()[0]
-        #     # size -= 1
-        #     i, j = local_max[0], local_max[1]
-        #     detection[k - k_left][0], detection[k - k_left][1] = i.long(), j.long()
-        #     k_left = k_left - 1
-        #     # heatmap_max_removed[i, j] = -999999
-        #     # compare_lst = []
-        #     # for x in range(i - 2, i + 2 + 1):
-        #     #     for y in range(j - 2, j + 2 + 1):
-        #     #         if x in range(0, H) and y in range(0, W):
-        #     #             compare_lst.append(heatmap[x, y])
-        #     # print(heatmap[i, j])
-        #     # print(compare_lst)
-        #     # print(max(compare_lst))
-        #     # if heatmap[i, j] == max(compare_lst):
-        #     #     detection[k - k_left][0], detection[k - k_left][1] = i, j
-        #     #     detection_score[k-k_left] = heatmap[i, j]
-        #     #     k_left = k_left - 1
-            
-        #     # if size == 0:
-        #     #     break
-        
-        # #k = k - k_left
-        # #detection = detection[:k]
+        detection = detection[:k]
+        detection_score = detection_score[:k]
 
         # 3. Refine locations
         predicted_offsets = torch.zeros((k, 2))
@@ -193,6 +167,8 @@ class DetectionModel(nn.Module):
             i, j = detection[index]
             predicted_offsets[index][0] = offset_x[i, j] + detection[index][0]
             predicted_offsets[index][1] = offset_y[i, j] + detection[index][1]
+
+        print("Predicted Offsets", predicted_offsets)
 
         # 4. Predict bounding box
         bounding_boxes = torch.zeros((k, 2))
@@ -213,8 +189,6 @@ class DetectionModel(nn.Module):
         heading = heading[ind]
         bounding_boxes = bounding_boxes[ind]
         detection_score = detection_score[ind]
-
-        # Assertion
 
         return Detections(
             predicted_offsets, heading, bounding_boxes, detection_score
