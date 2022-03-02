@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 import torch
-import math
 
 from detection.types import Detections
 

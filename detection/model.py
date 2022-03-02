@@ -82,7 +82,7 @@ class DetectionModel(nn.Module):
 
     @torch.no_grad()
     def inference(
-        self, bev_lidar: Tensor, k: int = 100, score_threshold: float = 0.05
+        self, bev_lidar: Tensor, k: int = 500, score_threshold: float = 0.05
     ) -> Detections:
         """Predict a set of 2D bounding box detections from the given LiDAR point cloud.
 
@@ -132,8 +132,6 @@ class DetectionModel(nn.Module):
         sin_theta = chi[5]
         cos_theta = chi[6]
 
-        print("heatmap", heatmap.shape)
-
         # 2. Localize Detections
         detection = torch.zeros((k, 2), dtype = torch.int64)
         detection_score = torch.zeros(k)
@@ -145,43 +143,39 @@ class DetectionModel(nn.Module):
         output_indices = torch.stack((output, indices)).permute(1, 0)
         local_max = torch.unique(output_indices, dim = 0)
         local_max_sorted = local_max[local_max[:, 0].sort(descending = True)[1]]
+
         if len(local_max_sorted) <= k:
             topk = local_max_sorted
         else:
             topk = local_max_sorted[:k]
 
-        for i in range(len(topk)):
-            detection_score[i] = topk[i][0]
-            rows = torch.div(topk[i][1], W, rounding_mode = "trunc")
-            cols = topk[i][1] % W
-            detection[i][0] = rows
-            detection[i][1] = cols
-
         k = len(topk)
         detection = detection[:k]
         detection_score = detection_score[:k]
 
+        detection_score = topk[:, 0]
+        detection[:, 0] = torch.div(topk[:, 1], W, rounding_mode = "floor") # row
+        detection[:, 1] = topk[:, 1] % W # col
+
         # 3. Refine locations
         predicted_offsets = torch.zeros((k, 2))
         for index in range(len(predicted_offsets)):
-            i, j = detection[index]
-            predicted_offsets[index][0] = offset_x[i, j] + detection[index][0]
-            predicted_offsets[index][1] = offset_y[i, j] + detection[index][1]
-
-        print("Predicted Offsets", predicted_offsets)
+            j, i = detection[index]
+            predicted_offsets[index][0] = offset_x[j, i] + detection[index][1]
+            predicted_offsets[index][1] = offset_y[j, i] + detection[index][0]
 
         # 4. Predict bounding box
         bounding_boxes = torch.zeros((k, 2))
         for index in range(len(bounding_boxes)):
-            i, j = detection[index]
-            bounding_boxes[index][0] = x_size[i, j]
-            bounding_boxes[index][1] = y_size[i, j]
+            j, i = detection[index]
+            bounding_boxes[index][0] = x_size[j, i]
+            bounding_boxes[index][1] = y_size[j, i]
 
         # 5. Predict heading
         heading = torch.zeros(k)
         for index in range(len(heading)):
-            i, j = detection[index]
-            heading[index] = torch.atan2(sin_theta[i, j], cos_theta[i, j])
+            j, i = detection[index]
+            heading[index] = torch.atan2(sin_theta[j, i], cos_theta[j, i])
 
         # 6. Remove all detections with a score less than or equal to `score_threshold`
         ind = (detection_score > score_threshold)
@@ -193,7 +187,3 @@ class DetectionModel(nn.Module):
         return Detections(
             predicted_offsets, heading, bounding_boxes, detection_score
         )
-
-        # return Detections(
-        #     torch.zeros((0, 3)), torch.zeros(0), torch.zeros((0, 2)), torch.zeros(0)
-        # )

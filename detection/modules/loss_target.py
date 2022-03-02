@@ -141,6 +141,8 @@ class DetectionLossTargetBuilder:
 
         # 6. Concatenate training targets into a [7 x H x W] tensor.
         targets = torch.cat([heatmap[:, :, None], offsets, sizes, headings], dim=-1)
+        #import imageio
+        #imageio.imsave('./offset.png',offsets.squeeze().numpy()[...,0])
         return targets.permute(2, 0, 1)  # [7 x H x W]
 
     def build_target_tensor(self, labels: Detections) -> Tensor:
