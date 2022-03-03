@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from typing import List, Tuple
 
@@ -77,7 +78,12 @@ class Voxelizer(torch.nn.Module):
         # TODO: Replace this stub code.
         # BEV size P * D * H * W
         BEV = torch.zeros(
-            (len(pointclouds), self._depth, self._height, self._width),  # Helper function
+            (
+                len(pointclouds),
+                self._depth,
+                self._height,
+                self._width,
+            ),  # Helper function
             dtype=torch.bool,
             device=pointclouds[0].device,
         )
@@ -108,7 +114,7 @@ class Voxelizer(torch.nn.Module):
             y_valid_min = (y > torch.tensor(self._y_min))
             occupied = occupied[(x_valid_max & x_valid_min & y_valid_max & y_valid_min)].long()
             BEV[batch_num, occupied[:, 0], occupied[:, 1], occupied[:, 2]] = 1
-            
+
         return BEV
 
     def project_detections(self, detections: Detections) -> Detections:
@@ -150,5 +156,3 @@ class Voxelizer(torch.nn.Module):
         scores = detections.scores[mask] if detections.scores is not None else None
 
         return Detections(centroids, yaws, boxes, scores)
-
-
