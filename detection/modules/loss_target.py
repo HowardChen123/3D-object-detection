@@ -30,7 +30,12 @@ def create_heatmap(grid_coords: Tensor, center: Tensor, scale: float) -> Tensor:
         An [H x W] heatmap tensor, normalized such that its peak is 1.
     """
     # TODO: Replace this stub code.
-    return torch.zeros_like(grid_coords[:, :, 0], dtype=torch.float)
+    grid_center = grid_coords[:, :, ] - center
+    grid_square = torch.square(grid_center[:, :, ])
+
+    unnormalized_heatmap = torch.exp(-torch.sum(grid_square, 2)/scale)
+    #return torch.zeros_like(grid_coords[:, :, 0], dtype=torch.float)
+    return unnormalized_heatmap[:, :, ] / torch.max(unnormalized_heatmap)
 
 
 class DetectionLossTargetBuilder:
@@ -42,7 +47,7 @@ class DetectionLossTargetBuilder:
         """Initialization.
 
         Args:
-            bev_size: The [depth, height, width] of the bird's eye view voxel grid.
+            bev_size: The [depth, height width] of the bird's eye view voxel grid.
                 depth is the size along the z-axis, height is along the y-axis, and
                 width is along the x-axis.
             config: The detection loss configuration.
@@ -104,7 +109,11 @@ class DetectionLossTargetBuilder:
         # the target offset equals (0, 0) instead.
 
         # TODO: Replace this stub code.
-        offsets = torch.zeros(H, W, 2)
+        offsets = center - grid_coords[:, :, ]
+        ind_set_zero = heatmap <= self._heatmap_threshold
+        ind_set_zero = torch.unsqueeze(ind_set_zero, dim=-1)
+        ind_set_zero = torch.cat((ind_set_zero, ind_set_zero), 2)
+        offsets = torch.where(ind_set_zero, torch.tensor(0, dtype = torch.float32), offsets)
 
         # 4. Create box size training target.
         # Given the label's bounding box size (x_size, y_size), the target size at pixel (i, j)
@@ -113,7 +122,9 @@ class DetectionLossTargetBuilder:
         # the target size equals (0, 0) instead.
 
         # TODO: Replace this stub code.
-        sizes = torch.zeros(H, W, 2)
+        sizes = torch.clone(grid_coords).float()
+        box_size_imputer = torch.mul(torch.ones(grid_coords.shape), torch.Tensor([x_size, y_size]))
+        sizes = torch.where(ind_set_zero, torch.tensor(0, dtype = torch.float32), box_size_imputer)
 
         # 5. Create heading training targets.
         # Given the label's heading angle yaw, the target heading at pixel (i, j)
@@ -122,10 +133,16 @@ class DetectionLossTargetBuilder:
         # the target heading equals (0, 0) instead.
 
         # TODO: Replace this stub code.
-        headings = torch.zeros(H, W, 2)
+        sin = torch.sin(torch.as_tensor(yaw))
+        cos = torch.cos(torch.as_tensor(yaw))
+        headings = torch.clone(grid_coords).float()
+        heading_yaw_imputer = torch.mul(torch.ones(grid_coords.shape), torch.Tensor((sin, cos)))
+        headings = torch.where(ind_set_zero, torch.tensor(0, dtype = torch.float32), heading_yaw_imputer)
 
         # 6. Concatenate training targets into a [7 x H x W] tensor.
         targets = torch.cat([heatmap[:, :, None], offsets, sizes, headings], dim=-1)
+        #import imageio
+        #imageio.imsave('./offset.png',offsets.squeeze().numpy()[...,0])
         return targets.permute(2, 0, 1)  # [7 x H x W]
 
     def build_target_tensor(self, labels: Detections) -> Tensor:
