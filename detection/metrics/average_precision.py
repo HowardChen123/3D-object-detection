@@ -75,36 +75,42 @@ def compute_precision_recall_curve(
         cdist = torch.cdist(detections, labels, p=2)
         precision = []
         recall = []
+        # print(torch.sum(cdist <= threshold)) # 216
         # record for labels matching
         labels_record = torch.zeros(labels.size()[0])
-        print(labels_record.size())
         for i in range(detections.size()[0]):
             # Computing TP/FP 
             # Step 1: the Euclidean distance between their centers is at most `threshold`; 
             # Get labels for one detection satisfying threshold
             under = cdist[i] <= threshold
-            under_ind = under.nonzero()
+            
+            under_ind = under.nonzero() #torch.Size([n, 1])
             # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
-            matched_labels = cdist[i][under_ind] >= cdist[:, under_ind]
-            matched_labels = matched_labels.permute(1, 0, 2)
+            label_col = cdist[:, under_ind] <= threshold
+            matched_labels = cdist[i][under_ind] >= cdist[:, label_col]#torch.Size([1, 1]) torch.Size([500, 1, 1]) torch.Size([500, 1, 1])
+            # print("before", matched_labels.size())
+            # matched_labels = matched_labels.permute(1, 0, 2)
+            # print("after", matched_labels.size())
             # Check if the detection satisfying any labels
-            matched_labels = torch.squeeze(matched_labels)
+            true_labels = torch.any(torch.all(matched_labels, 0))
+            # print(1, torch.all(matched_labels, 0))
+            # print(2, true_labels)
             # result = torch.any(torch.all(matched_labels, 1))
-            result = torch.sum(matched_labels)
+            result = torch.sum(true_labels)
             TP += result
             FP += 1 - result
 
             # Computing FN
             # record matched detections for each label
-            labels_ind = matched_labels.nonzero()
-            # # Get index of all matched labels
-            # lables_ind = under_ind[labels_det] 
+            labels_det = torch.all(matched_labels, 0)
+            # Get index of all matched labels
+            lables_ind = under_ind[labels_det] 
             # Update record of labels
-            labels_record[labels_ind] += 1
+            labels_record[lables_ind] += 1
         FN += labels.size()[0] - torch.count_nonzero(labels_record)
+        print(3, TP, FP)
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
-        print(recall)
     return PRCurve(torch.tensor(precision), torch.tensor(recall))
 
 
@@ -124,23 +130,23 @@ def compute_area_under_curve(curve: PRCurve) -> float:
         The area under the curve, as defined above.
     """
     # TODO: Replace this stub code.
-    return torch.sum(curve.recall).item() * 0.0
+    # return torch.sum(curve.recall).item() * 0.0
 
-    # # PRCurve: precision: torch.Tensor + recall: torch.Tensor
-    # # Follow instructions, r_0 = 0.0
-    # # Prepare p
-    # p = curve.precision
-    # # Prepare r
-    # r = curve.recall
-    # # copy r
-    # c_range  = [i for i in range(0, r.size()[0] - 1)]
-    # range_tensor = torch.Tensor(c_range).int()
-    # copy = torch.zeros(r.size())
-    # c = copy.index_add_(0, range_tensor + 1, r[c_range])
-    # # r_i - r_{i - 1}
-    # r_minus = r - c
-    # AP = torch.sum(r_minus * p)
-    # return AP
+    # PRCurve: precision: torch.Tensor + recall: torch.Tensor
+    # Follow instructions, r_0 = 0.0
+    # Prepare p
+    p = curve.precision
+    # Prepare r
+    r = curve.recall
+    # copy r
+    c_range  = [i for i in range(0, r.size()[0] - 1)]
+    range_tensor = torch.Tensor(c_range).int()
+    copy = torch.zeros(r.size())
+    c = copy.index_add_(0, range_tensor + 1, r[c_range])
+    # r_i - r_{i - 1}
+    r_minus = r - c
+    AP = torch.sum(r_minus * p)
+    return AP
 
 
 def compute_average_precision(
