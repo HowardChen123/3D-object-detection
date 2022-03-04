@@ -111,7 +111,7 @@ def compute_precision_recall_curve(
     pre = torch.tensor(precision)
     rec = torch.tensor(recall)
     pre_sorted, pre_ind = torch.sort(pre, descending=True)
-    rec_sorted, rec_ind = torch.sort(rec, descending=True)
+    rec_sorted, rec_ind = torch.sort(rec, descending=False)
     return PRCurve(pre_sorted, rec_sorted)
 
 
