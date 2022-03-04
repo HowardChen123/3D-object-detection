@@ -65,7 +65,8 @@ def compute_precision_recall_curve(
     # EvaluationFrame: detections: Detections + labels: Detections
     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
-    
+    precision = []
+    recall = []
     for evaluation in frames:
         detections = evaluation.detections.centroids
         labels = evaluation.labels.centroids
@@ -73,8 +74,6 @@ def compute_precision_recall_curve(
         FP = 0
         FN = 0
         cdist = torch.cdist(detections, labels, p=2)
-        precision = []
-        recall = []
         # print(torch.sum(cdist <= threshold)) # 216
         # record for labels matching
         labels_record = torch.zeros(labels.size()[0])
@@ -109,7 +108,8 @@ def compute_precision_recall_curve(
         FN += labels.size()[0] - torch.count_nonzero(labels_record)
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
-        return PRCurve(torch.tensor(precision), torch.tensor(recall))
+    print(1, len(precision), len(recall))
+    return PRCurve(torch.tensor(precision), torch.tensor(recall))
 
 
 def compute_area_under_curve(curve: PRCurve) -> float:
