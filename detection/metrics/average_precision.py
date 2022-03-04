@@ -86,8 +86,7 @@ def compute_precision_recall_curve(
             
             under_ind = under.nonzero() #torch.Size([n, 1])
             # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
-            label_col = cdist[:, under_ind] <= threshold
-            matched_labels = cdist[i][under_ind] >= cdist[:, label_col]#torch.Size([1, 1]) torch.Size([500, 1, 1]) torch.Size([500, 1, 1])
+            matched_labels = cdist[i][under_ind] >= (cdist[:, under_ind] <= threshold)#torch.Size([1, 1]) torch.Size([500, 1, 1]) torch.Size([500, 1, 1])
             # print("before", matched_labels.size())
             # matched_labels = matched_labels.permute(1, 0, 2)
             # print("after", matched_labels.size())
@@ -108,7 +107,6 @@ def compute_precision_recall_curve(
             # Update record of labels
             labels_record[lables_ind] += 1
         FN += labels.size()[0] - torch.count_nonzero(labels_record)
-        print(3, TP, FP)
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
     return PRCurve(torch.tensor(precision), torch.tensor(recall))
