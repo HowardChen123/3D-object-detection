@@ -67,10 +67,8 @@ def compute_precision_recall_curve(
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
     
     for evaluation in frames:
-        print(evaluation)
         detections = evaluation.detections.centroids
         labels = evaluation.labels.centroids
-        print(detections, labels)
         TP = 0 
         FP = 0
         FN = 0
@@ -79,6 +77,7 @@ def compute_precision_recall_curve(
         recall = []
         # record for labels matching
         labels_record = torch.zeros(labels.size()[0])
+        print(labels_record.size())
         for i in range(detections.size()[0]):
             # Computing TP/FP 
             # Step 1: the Euclidean distance between their centers is at most `threshold`; 
@@ -89,20 +88,23 @@ def compute_precision_recall_curve(
             matched_labels = cdist[i][under_ind] >= cdist[:, under_ind]
             matched_labels = matched_labels.permute(1, 0, 2)
             # Check if the detection satisfying any labels
-            result = torch.any(torch.all(matched_labels, 1))
+            matched_labels = torch.squeeze(matched_labels)
+            # result = torch.any(torch.all(matched_labels, 1))
+            result = torch.sum(matched_labels)
             TP += result
             FP += 1 - result
 
             # Computing FN
             # record matched detections for each label
-            labels_det = torch.all(matched_labels, 1)
-            # Get index of all matched labels
-            lables_ind =  under_ind[labels_det] 
+            labels_ind = matched_labels.nonzero()
+            # # Get index of all matched labels
+            # lables_ind = under_ind[labels_det] 
             # Update record of labels
-            labels_record[lables_ind] += 1
+            labels_record[labels_ind] += 1
         FN += labels.size()[0] - torch.count_nonzero(labels_record)
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
+        print(recall)
     return PRCurve(torch.tensor(precision), torch.tensor(recall))
 
 
