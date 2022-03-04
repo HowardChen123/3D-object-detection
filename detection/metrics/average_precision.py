@@ -109,7 +109,7 @@ def compute_precision_recall_curve(
         FN += labels.size()[0] - torch.count_nonzero(labels_record)
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
-    return PRCurve(torch.tensor(precision), torch.tensor(recall))
+        return PRCurve(torch.tensor(precision), torch.tensor(recall))
 
 
 def compute_area_under_curve(curve: PRCurve) -> float:
