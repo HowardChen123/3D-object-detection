@@ -67,24 +67,13 @@ def compute_precision_recall_curve(
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
     precision = []
     recall = []
-#   for s_i in all detection scores in decreasing order:
-
-#     for frame in frames:
-
-#          find detections with detection scores greater than or equal to s_i
-
-#          compute true positives on those detections
-
-#     compute one value of precision and recall
-
-# return precision and recall across all s_i
-    detection_score = frames[0].detections.scores
+    detection_scores = frames[0].detections.scores
     for i in range(1, len(frames)):
         scores = frames[i].detections.scores
-        detection_score = torch.cat((detection_score, scores))
-    detection_scores = torch.tensor(detection_score)
-    scores, ind = torch.sort(detection_scores, descending=True)
-    for s_i in scores:
+        detection_scores = torch.cat((detection_scores, scores))
+    max_score = torch.max(detection_scores)
+    min_score = torch.min(detection_scores)
+    for s_i in torch.linspace(min_score.item(), max_score.item(), 20):
         TP_lst = []
         labs_record_lst = []
         TP = 0 
@@ -123,7 +112,7 @@ def compute_precision_recall_curve(
                 # result = torch.any(torch.all(matched_labels, 1))
                 result = torch.sum(true_labels)
                 detections_TP.append(result)
-
+                print(2)
                 # Computing FN
                 # record matched detections for each label
                 labels_det = torch.all(matched_labels, 0)
@@ -141,6 +130,7 @@ def compute_precision_recall_curve(
         FP += valid_detection_total - torch.count_nonzero(torch.tensor(TP_lst))
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
+        print(3)
     pre = torch.tensor(precision)
     rec = torch.tensor(recall)
     return PRCurve(pre, rec)
