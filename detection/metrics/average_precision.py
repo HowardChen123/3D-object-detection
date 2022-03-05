@@ -30,7 +30,6 @@ class AveragePrecisionMetric:
     ap: float
     pr_curve: PRCurve
 
-
 def compute_precision_recall_curve(
     frames: List[EvaluationFrame], threshold: float
 ) -> PRCurve:
@@ -65,15 +64,30 @@ def compute_precision_recall_curve(
     # EvaluationFrame: detections: Detections + labels: Detections
     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
+    
     precision = []
     recall = []
-    detection_scores = frames[0].detections.scores
+#   for s_i in all detection scores in decreasing order:
+
+#     for frame in frames:
+
+#          find detections with detection scores greater than or equal to s_i
+
+#          compute true positives on those detections
+
+#     compute one value of precision and recall
+
+# return precision and recall across all s_i
+    detection_score = frames[0].detections.scores
     for i in range(1, len(frames)):
         scores = frames[i].detections.scores
-        detection_scores = torch.cat((detection_scores, scores))
-    detection_desc, detection_ind = torch.sort(detection_scores, descending=True)
-    for i in range(0, 10):
-        s_i = detection_desc[i]
+        detection_score = torch.cat((detection_score, scores))
+    # scores, ind = torch.sort(detection_score, descending=True)
+    max_score = torch.max(detection_score)
+    min_score = torch.min(detection_score)
+    print("Max", max_score)
+    print("Min", min_score)
+    for s_i in torch.linspace(0.80*max_score.item(), 0.88*max_score.item(), 30):
         TP_lst = []
         labs_record_lst = []
         TP = 0 
@@ -112,7 +126,7 @@ def compute_precision_recall_curve(
                 # result = torch.any(torch.all(matched_labels, 1))
                 result = torch.sum(true_labels)
                 detections_TP.append(result)
-                print(2)
+
                 # Computing FN
                 # record matched detections for each label
                 labels_det = torch.all(matched_labels, 0)
@@ -130,9 +144,116 @@ def compute_precision_recall_curve(
         FP += valid_detection_total - torch.count_nonzero(torch.tensor(TP_lst))
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
+    print("Precision", precision)
     pre = torch.tensor(precision)
     rec = torch.tensor(recall)
+
     return PRCurve(pre, rec)
+
+# def compute_precision_recall_curve(
+#     frames: List[EvaluationFrame], threshold: float
+# ) -> PRCurve:
+#     """Compute a precision/recall curve over a batch of evaluation frames.
+
+#     The PR curve plots the trade-off between precision and recall when sweeping
+#     across different score thresholds for your detections. To compute precision
+#     and recall for a score threshold s_i, consider the set of detections with
+#     scores greater than or equal to s_i. A detection is a true positive if it
+#     matches a ground truth label; it is a false positive if it does not.
+
+#     With this, we define precision = TP / (TP + FP) and recall = TP / (TP + FN),
+#     where TP is the number of true positive detections, FP is the number of false
+#     positive detections, and FN is the number of false negative labels (i.e. the
+#     number of ground truth labels that did not match any detections). By varying
+#     the score threshold s_i over all detection scores, we have the PR curve.
+
+#     What does it mean for a detection to match a ground truth label? In this assignment, we use
+#     the following definition: A detection matches a ground truth label if: (1) the Euclidean
+#     distance between their centers is at most `threshold`; and (2) no higher scoring detection
+#     satisfies condition (1) with respect to the same label.
+
+#     Args:
+#         frames: A batch of evaluation frames, each containing a detection/label pair.
+#         threshold: Two bounding boxes match if their bird's eye view
+#             center-to-center distance is strictly less than `threshold`.
+
+#     Returns:
+#         A precision/recall curve.
+#     """
+#     # TODO: Replace this stub code.
+#     # EvaluationFrame: detections: Detections + labels: Detections
+#     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
+#     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
+#     precision = []
+#     recall = []
+#     # detection_scores = frames[0].detections.scores
+#     # for i in range(1, len(frames)):
+#     #     scores = frames[i].detections.scores
+#     #     detection_scores = torch.cat((detection_scores, scores))
+#     # detection_desc, detection_ind = torch.sort(detection_scores, descending=True)
+#     # for i in range(10, detection_desc.size()[0], 1000):
+#         # s_i = detection_desc[i]
+#     TP_lst = []
+#     labs_record_lst = []
+#     TP = 0 
+#     FP = 0
+#     FN = 0
+#     valid_detection_total = 0
+#     for evaluation in frames:
+#         detections = evaluation.detections.centroids
+#         det_score = evaluation.detections.scores
+#         det_sort, det_ind = torch.sort(det_score, descending=True)
+#         valid_detections = detections[det_ind[:100]]
+#         # det_score_ind = det_score >= s_i
+#         # valid_detections = detections[det_score_ind]
+#         valid_detection_total += len(valid_detections)
+#         labels = evaluation.labels.centroids
+#         cdist = torch.cdist(valid_detections, labels, p=2)
+#         # print(torch.sum(cdist <= threshold)) # 216
+#         # record for labels matching
+#         labels_record = torch.zeros(labels.size()[0])
+#         # record for detections matching
+#         detections_TP = []
+#         for i in range(valid_detections.size()[0]):
+#             # Computing TP/FP 
+#             # Step 1: the Euclidean distance between their centers is at most `threshold`; 
+#             # Get labels for one detection satisfying threshold
+#             under = cdist[i] <= threshold
+            
+#             under_ind = under.nonzero() #torch.Size([n, 1])
+#             # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
+#             matched_labels = cdist[i][under_ind] >= (cdist[:, under_ind] <= threshold)#torch.Size([1, 1]) torch.Size([500, 1, 1]) torch.Size([500, 1, 1])
+#             # print("before", matched_labels.size())
+#             # matched_labels = matched_labels.permute(1, 0, 2)
+#             # print("after", matched_labels.size())
+#             # Check if the detection satisfying any labels
+#             true_labels = torch.any(torch.all(matched_labels, 0))
+#             # print(1, torch.all(matched_labels, 0))
+#             # print(2, true_labels)
+#             # result = torch.any(torch.all(matched_labels, 1))
+#             result = torch.sum(true_labels)
+#             detections_TP.append(result)
+#             print(2)
+#             # Computing FN
+#             # record matched detections for each label
+#             labels_det = torch.all(matched_labels, 0)
+#             # Get index of all matched labels
+#             lables_ind = under_ind[labels_det] 
+#             # Update record of labels
+#             labels_record[lables_ind] += 1
+#             TP_lst.extend(detections_TP)
+#             labs_record_lst.append(labels_record)
+#         labs_record_ts = labs_record_lst[0]
+#         for j in range(1, len(labs_record_lst)):
+#             labs_record_ts = torch.cat((labs_record_ts, labs_record_lst[j]))
+#         FN += labels.size()[0]*len(frames) - torch.count_nonzero(labs_record_ts)
+#         TP += torch.count_nonzero(torch.tensor(TP_lst))
+#         FP += valid_detection_total - torch.count_nonzero(torch.tensor(TP_lst))
+#         precision.append(TP / (TP + FP))
+#         recall.append(TP / (TP + FN))
+#     pre = torch.tensor(precision)
+#     rec = torch.tensor(recall)
+#     return PRCurve(pre, rec)
 
 
 def compute_area_under_curve(curve: PRCurve) -> float:
