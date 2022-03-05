@@ -71,9 +71,9 @@ def compute_precision_recall_curve(
     for i in range(1, len(frames)):
         scores = frames[i].detections.scores
         detection_scores = torch.cat((detection_scores, scores))
-    max_score = torch.max(detection_scores)
-    min_score = torch.min(detection_scores)
-    for s_i in torch.linspace(max_score.item(), min_score.item(), 5):
+    detection_desc, detection_ind = torch.sort(detection_scores, descending=True)
+    for i in range(0, 10):
+        s_i = detection_desc[i]
         TP_lst = []
         labs_record_lst = []
         TP = 0 
@@ -112,6 +112,7 @@ def compute_precision_recall_curve(
                 # result = torch.any(torch.all(matched_labels, 1))
                 result = torch.sum(true_labels)
                 detections_TP.append(result)
+                print(2)
                 # Computing FN
                 # record matched detections for each label
                 labels_det = torch.all(matched_labels, 0)
