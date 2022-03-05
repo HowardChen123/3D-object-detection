@@ -73,7 +73,7 @@ def compute_precision_recall_curve(
         detection_scores = torch.cat((detection_scores, scores))
     max_score = torch.max(detection_scores)
     min_score = torch.min(detection_scores)
-    for s_i in torch.linspace(min_score.item(), max_score.item(), 20):
+    for s_i in torch.linspace(max_score.item(), min_score.item(), 15):
         TP_lst = []
         labs_record_lst = []
         TP = 0 
