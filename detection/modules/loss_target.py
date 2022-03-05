@@ -34,8 +34,47 @@ def create_heatmap(grid_coords: Tensor, center: Tensor, scale: float) -> Tensor:
     grid_square = torch.square(grid_center[:, :, ])
 
     unnormalized_heatmap = torch.exp(-torch.sum(grid_square, 2)/scale)
-    #return torch.zeros_like(grid_coords[:, :, 0], dtype=torch.float)
     return unnormalized_heatmap[:, :, ] / torch.max(unnormalized_heatmap)
+
+def create_elliptical_heatmap(grid_coords: Tensor, center: Tensor, yaw: float, 
+                                x_size: float, y_size: float, const: float):
+    """Return a heatmap based on a Gaussian kernel with center `center`. Rotation and scaling are
+    given by `heading` and `box_sizes`
+
+    Specifically, each pixel with coordinates X = (x, y).T is assigned a heatmap value
+    using a Gaussian kernel centered on mu = (cx, cy) with covariance matrix C:
+
+                e^(-(X - mu).T @ C^{-1} @ (X-mu))
+
+    where C = RS, R = ((cos(yaw), -sin(yaw)), (sin(yaw), cos(yaw))), 
+    S = ((x_size, 0), (0, y_size))
+
+    Subsequently, the heatmap is normalized such that its maximum value is 1.
+
+    Args:
+        grid_coords: An [H x W x 2] tensor containing the (x, y) coordinates of every
+            pixel in an [H x W] image. For example, for a [2 x 3] image, `grid_coords`
+            contains the elements (0, 0), (0, 1), (0, 2), ..., (1, 2).
+        center: A [2] tensor containing the (x, y) coordinate of the center.
+            This argument controls the kernel's center.
+        yaw: The yaw of the label, in radians and in BEV image coordinates.
+        x_size: The x-axis size of the label, in BEV image coordinates.
+        y_size: The y-axis size of the label, in BEV image coordinates.
+
+    Returns:
+        An [H x W] heatmap tensor, normalized such that its peak is 1.
+    """
+    grid_center = grid_coords[:, :, ] - center
+    R = torch.tensor([[math.cos(yaw), -math.sin(yaw)], [math.sin(yaw), math.cos(yaw)]])
+    S = torch.tensor([[x_size, 0], [0, y_size]])/min(x_size, y_size)
+    C = torch.matmul(R, S)
+    grid_center = torch.unsqueeze(grid_center, dim = -1)
+    M1 = torch.einsum('hwij,ii->hwji', grid_center, S)
+    M2 = torch.squeeze(torch.einsum('hwji,hwij->hwj', M1, grid_center))/(const)
+    neg_M2 = -M2
+    neg_M2_stable = neg_M2 - torch.max(neg_M2)
+    normalized_heatmap = torch.exp(neg_M2_stable) 
+    return normalized_heatmap
 
 
 class DetectionLossTargetBuilder:
@@ -57,7 +96,7 @@ class DetectionLossTargetBuilder:
         self._heatmap_norm_scale = config.heatmap_norm_scale
 
     def build_target_tensor_for_label(
-        self, cx: float, cy: float, yaw: float, x_size: float, y_size: float
+        self, cx: float, cy: float, yaw: float, x_size: float, y_size: float, elliptical: bool
     ) -> Tensor:
         """Return the training target tensor for the given bounding box.
 
@@ -82,6 +121,7 @@ class DetectionLossTargetBuilder:
             yaw: The yaw of the label, in radians and in BEV image coordinates.
             x_size: The x-axis size of the label, in BEV image coordinates.
             y_size: The y-axis size of the label, in BEV image coordinates.
+            elliptical: Indicator if we want a elliptical heatmap
 
         Returns:
             A [7 x H x W] tensor representing the training target for one bounding box,
@@ -100,7 +140,10 @@ class DetectionLossTargetBuilder:
         # 2. Create heatmap training targets by invoking the `create_heatmap` function.
         center = torch.tensor([cx, cy])
         scale = (x_size ** 2 + y_size ** 2) / self._heatmap_norm_scale
-        heatmap = create_heatmap(grid_coords, center=center, scale=scale)  # [H x W]
+        if elliptical:
+            heatmap = create_elliptical_heatmap(grid_coords, center, yaw, x_size, y_size, scale)
+        else:
+            heatmap = create_heatmap(grid_coords, center=center, scale=scale)  # [H x W]
 
         # 3. Create offset training targets.
         # Given the label's center (cx, cy), the target offset at pixel (i, j) equals
@@ -167,6 +210,7 @@ class DetectionLossTargetBuilder:
                 labels.yaws[index].item(),
                 labels.boxes_x[index].item(),
                 labels.boxes_y[index].item(),
+                False
             )
             target_tensors.append(target_tensor_for_label)
 

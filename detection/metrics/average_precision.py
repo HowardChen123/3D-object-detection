@@ -66,44 +66,90 @@ def compute_precision_recall_curve(
     # Detections: centroids: torch.Tensor + yaws: torch.Tensor + boxes: torch.Tensor + scores: Optional[torch.Tensor] = None
     # Detections: centroids_x(self) + centroids_y(self) + boxes_x(self) + boxes_y(self) + to(self, device: torch.device) + __len__(self)
     
-    for evaluation in frames:
-        print(evaluation)
-        detections = evaluation.detections.centroids
-        labels = evaluation.labels.centroids
-        print(detections, labels)
+    precision = []
+    recall = []
+#   for s_i in all detection scores in decreasing order:
+
+#     for frame in frames:
+
+#          find detections with detection scores greater than or equal to s_i
+
+#          compute true positives on those detections
+
+#     compute one value of precision and recall
+
+# return precision and recall across all s_i
+    detection_score = frames[0].detections.scores
+    for i in range(1, len(frames)):
+        scores = frames[i].detections.scores
+        detection_score = torch.cat((detection_score, scores))
+    # scores, ind = torch.sort(detection_score, descending=True)
+    max_score = torch.max(detection_score)
+    min_score = torch.min(detection_score)
+    print("Max", max_score)
+    print("Min", min_score)
+    for s_i in torch.linspace(0.95*max_score.item(), 0.80*max_score.item(), 30):
+        TP_lst = []
+        labs_record_lst = []
         TP = 0 
         FP = 0
         FN = 0
-        cdist = torch.cdist(detections, labels, p=2)
-        precision = []
-        recall = []
-        # record for labels matching
-        labels_record = torch.zeros(labels.size()[0])
-        for i in range(detections.size()[0]):
-            # Computing TP/FP 
-            # Step 1: the Euclidean distance between their centers is at most `threshold`; 
-            # Get labels for one detection satisfying threshold
-            under = cdist[i] <= threshold
-            under_ind = under.nonzero()
-            # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
-            matched_labels = cdist[i][under_ind] >= cdist[:, under_ind]
-            matched_labels = matched_labels.permute(1, 0, 2)
-            # Check if the detection satisfying any labels
-            result = torch.any(torch.all(matched_labels, 1))
-            TP += result
-            FP += 1 - result
+        valid_detection_total = 0
+        for evaluation in frames:
+            detections = evaluation.detections.centroids
+            det_score = evaluation.detections.scores
+            det_score_ind = det_score >= s_i
+            valid_detections = detections[det_score_ind]
+            valid_detection_total += len(valid_detections)
+            labels = evaluation.labels.centroids
+            cdist = torch.cdist(valid_detections, labels, p=2)
+            # print(torch.sum(cdist <= threshold)) # 216
+            # record for labels matching
+            labels_record = torch.zeros(labels.size()[0])
+            # record for detections matching
+            detections_TP = []
+            for i in range(valid_detections.size()[0]):
+                # Computing TP/FP 
+                # Step 1: the Euclidean distance between their centers is at most `threshold`; 
+                # Get labels for one detection satisfying threshold
+                under = cdist[i] <= threshold
+                
+                under_ind = under.nonzero() #torch.Size([n, 1])
+                # Step 2: no higher scoring detection satisfies condition step1 with respect to the same label.
+                matched_labels = cdist[i][under_ind] >= (cdist[:, under_ind] <= threshold)#torch.Size([1, 1]) torch.Size([500, 1, 1]) torch.Size([500, 1, 1])
+                # print("before", matched_labels.size())
+                # matched_labels = matched_labels.permute(1, 0, 2)
+                # print("after", matched_labels.size())
+                # Check if the detection satisfying any labels
+                true_labels = torch.any(torch.all(matched_labels, 0))
+                # print(1, torch.all(matched_labels, 0))
+                # print(2, true_labels)
+                # result = torch.any(torch.all(matched_labels, 1))
+                result = torch.sum(true_labels)
+                detections_TP.append(result)
 
-            # Computing FN
-            # record matched detections for each label
-            labels_det = torch.all(matched_labels, 1)
-            # Get index of all matched labels
-            lables_ind =  under_ind[labels_det] 
-            # Update record of labels
-            labels_record[lables_ind] += 1
-        FN += labels.size()[0] - torch.count_nonzero(labels_record)
+                # Computing FN
+                # record matched detections for each label
+                labels_det = torch.all(matched_labels, 0)
+                # Get index of all matched labels
+                lables_ind = under_ind[labels_det] 
+                # Update record of labels
+                labels_record[lables_ind] += 1
+            TP_lst.extend(detections_TP)
+            labs_record_lst.append(labels_record)
+        labs_record_ts = labs_record_lst[0]
+        for j in range(1, len(labs_record_lst)):
+            labs_record_ts = torch.cat((labs_record_ts, labs_record_lst[j]))
+        FN += labels.size()[0]*len(frames) - torch.count_nonzero(labs_record_ts)
+        TP += torch.count_nonzero(torch.tensor(TP_lst))
+        FP += valid_detection_total - torch.count_nonzero(torch.tensor(TP_lst))
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
-    return PRCurve(torch.tensor(precision), torch.tensor(recall))
+    print("Precision", precision)
+    pre = torch.tensor(precision)
+    rec = torch.tensor(recall)
+
+    return PRCurve(pre, rec)
 
 
 def compute_area_under_curve(curve: PRCurve) -> float:
@@ -122,23 +168,23 @@ def compute_area_under_curve(curve: PRCurve) -> float:
         The area under the curve, as defined above.
     """
     # TODO: Replace this stub code.
-    return torch.sum(curve.recall).item() * 0.0
+    # return torch.sum(curve.recall).item() * 0.0
 
-    # # PRCurve: precision: torch.Tensor + recall: torch.Tensor
-    # # Follow instructions, r_0 = 0.0
-    # # Prepare p
-    # p = curve.precision
-    # # Prepare r
-    # r = curve.recall
-    # # copy r
-    # c_range  = [i for i in range(0, r.size()[0] - 1)]
-    # range_tensor = torch.Tensor(c_range).int()
-    # copy = torch.zeros(r.size())
-    # c = copy.index_add_(0, range_tensor + 1, r[c_range])
-    # # r_i - r_{i - 1}
-    # r_minus = r - c
-    # AP = torch.sum(r_minus * p)
-    # return AP
+    # PRCurve: precision: torch.Tensor + recall: torch.Tensor
+    # Follow instructions, r_0 = 0.0
+    # Prepare p
+    p = curve.precision
+    # Prepare r
+    r = curve.recall
+    # copy r
+    c_range  = [i for i in range(0, r.size()[0] - 1)]
+    range_tensor = torch.Tensor(c_range).int()
+    copy = torch.zeros(r.size())
+    c = copy.index_add_(0, range_tensor + 1, r[c_range])
+    # r_i - r_{i - 1}
+    r_minus = r - c
+    AP = torch.sum(r_minus * p)
+    return AP
 
 
 def compute_average_precision(

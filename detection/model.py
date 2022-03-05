@@ -19,6 +19,18 @@ class DetectionModelConfig:
             y_range=(-50.0, 50.0),
             z_range=(0.0, 10.0),
             step=0.25,
+            # x_range=(-80.0, 80.0),
+            # y_range=(-56.0, 56.0),
+            # z_range=(0.0, 10.0),
+            # step=0.50,
+            # x_range=(-80.0, 80.0),
+            # y_range=(-56.0, 56.0),
+            # z_range=(0.0, 10.0),
+            # step=1.0,
+            # x_range=(-80.0, 80.0),
+            # y_range=(-64.0, 64.0),
+            # z_range=(0.0, 10.0),
+            # step=2.0,
         )
     )
     loss: DetectionLossConfig = field(
