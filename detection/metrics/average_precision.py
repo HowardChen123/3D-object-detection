@@ -73,7 +73,7 @@ def compute_precision_recall_curve(
         detection_scores = torch.cat((detection_scores, scores))
     max_score = torch.max(detection_scores)
     min_score = torch.min(detection_scores)
-    for s_i in torch.linspace(max_score.item(), min_score.item(), 15):
+    for s_i in torch.linspace(max_score.item(), min_score.item(), 5):
         TP_lst = []
         labs_record_lst = []
         TP = 0 
@@ -112,7 +112,6 @@ def compute_precision_recall_curve(
                 # result = torch.any(torch.all(matched_labels, 1))
                 result = torch.sum(true_labels)
                 detections_TP.append(result)
-                print(2)
                 # Computing FN
                 # record matched detections for each label
                 labels_det = torch.all(matched_labels, 0)
@@ -130,7 +129,6 @@ def compute_precision_recall_curve(
         FP += valid_detection_total - torch.count_nonzero(torch.tensor(TP_lst))
         precision.append(TP / (TP + FP))
         recall.append(TP / (TP + FN))
-        print(3)
     pre = torch.tensor(precision)
     rec = torch.tensor(recall)
     return PRCurve(pre, rec)
